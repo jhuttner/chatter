@@ -1,36 +1,51 @@
-## Imports
-
-express = require 'express'
-redis = require('redis').createClient()
-server = require('http').Server(app)
-io = require('socket.io')(server)
+## Static
 port = 3001
-redis_db = TODO
+version = "0.1"
 
 
-## Configuration
+## Express
+express = require 'express'
+app = express()
 
+
+## Socket.io
+server = require('http').createServer(app)
+io = require('socket.io').listen(server)
+
+
+## Redis
+redis = require('redis').createClient()
+redis_db = 1
 redis.select redis_db
 
-app = express()
+
+## Express Configuration
 app.use express.bodyParser()
 app.configure () ->
   app.set 'views', __dirname + '/views'
   app.set 'view engine', 'jade'
+  app.set 'view options', pretty: true
+  app.use express.cookieParser()
   app.use express.bodyParser()
   app.use express.methodOverride()  
   app.use app.router
-  app.use expres.static(__dirname + '/public')
+  app.use express.static(__dirname + '/public')
+ 
+app.configure 'development', () ->
+  app.locals.pretty = true
+  app.use(express.errorHandler({ dumpExceptions: true, showStack: true }))
+
+app.configure 'production', () ->
+  app.use(express.errorHandler())
 
 
 ## Helper functions
-
 log = (s) ->
   console.log s
 
 error = (s) ->
   response = {response: {status: "ERROR", msg: s}}
-  JSON.dumps response
+  JSON.stringify response
   response
 
 ok = (o) ->
@@ -43,7 +58,6 @@ redis.on "error", (err) ->
 
 
 ## Routes
-
 app.get '/', (req, res, next) ->
   res.redirect '/home'
 
@@ -51,91 +65,118 @@ app.get '/status', (req, res, next) ->
   res.send 'Chatter server listening on port ' + port
 
 app.post '/login', (req, res, next) ->
-  username = req.username
+  username = req.body.username
   res.cookie 'username', username
   res.redirect '/home'
+
+app.get /^\/login(.*)/, (req, res, next) ->
+  res.clearCookie 'username'
+  data = page: 'login', username: ''
+  res.render 'index', data
 
 app.get '/logout', (req, res, next) ->
   res.clearCookie 'username'
   res.redirect '/login'
 
-app.get '/home', (req, res, next) ->
-  username = req.cookie 'username'
-  if not username
-    res.redirect '/login?err=requires_login'
-  else
-    # 1. Get the topics started by the user.
-    redis.lrange 'user:topics:' + username, 0, -1, (err, reply) ->
-      topic_ids = reply
-      user_topics = []
-      user_questions = {}
-      remaining = topic_ids.length
-
-      for topic_id in topic_ids
-        redis.hgetall 'topic:'+topic_id,  (err, reply) ->
-          user_topics.push reply
+get_topics_by_user = (username, cb) ->
+  redis.lrange 'user:topics:' + username, 0, -1, (err, reply) ->
+    if not reply.length
+      cb []
+    else
+      result = []
+      for id in reply
+        remaining = reply.length
+        redis.hgetall 'topic:' + id,  (err, reply) ->
+          result.push reply
           remaining -= 1
           if remaining == 0
+            cb result
 
-            # 2. Get the questions asked by the user.
-            redis.lrange 'user:questions:' + username, 0, -1, (err, reply) ->
-              user_question_ids = reply
-              remaining = user_question_ids.length
-              for question_id in question_ids
-                redis.hgetall 'question:' + question_id, (err, reply) ->
-                  user_questions.push reply
-                  remaining -= 1
-                  if remaining == 0
-                    data =
-                      user_topics: user_topics
-                      user_questions: user_questions
-                      username: username
-                    res.render 'home', data
+get_questions_by_user = (username, cb) ->
+  redis.lrange 'user:questions:' + username, 0, -1, (err, reply) ->
+    if not reply.length
+      cb []
+    else
+      result = []
+      remaining = reply.length
+      for id in reply
+        redis.hgetall 'question:' + id, (err, reply) ->
+          result.push reply
+          remaining -= 1
+          if remaining == 0
+            cb result
 
-app.post '/create-topic', (req, res, next) ->
-  username = req.cookie 'username'
-  topic_name = req.body 'topic_name'
-  if not username
+app.get '/home', (req, res, next) ->
+  username = req.cookies.username
+  if username == 'undefined'
     res.redirect '/login?error=requires_login'
   else
-    redis.sadd 'global:topicNames', topic_name, (err, reply) ->
+    get_topics_by_user username, (topics) ->
+      get_questions_by_user username, (questions) ->
+          data = 
+            page: 'home'
+            user_topics: topics
+            user_questions: questions
+            username: username
+          console.log 'data is', data
+          res.render 'index', data
+
+app.post '/topic/create', (req, res, next) ->
+  username = req.cookies.username
+  name = req.body.name
+  if username == 'undefined'
+    res.redirect '/login?error=requires_login'
+  else
+    redis.sadd 'global:topicNames', name, (err, reply) ->
+      console.log 'here reply is', reply
       if reply == 0
+        # TODO - handle this better.  This error handler is not the one to use.
         res.send error('topic name already in use.  try again')
       else
         redis.incr 'global:nextTopicId', (err, reply) ->
           topic_id = reply
-          data = name: topic_name, creator: username, created: (new Date()).getTime()
+          data = id: topic_id.toString(), name: name, creator: username, created: (new Date()).getTime().toString()
+          console.log 'data is', data
           redis.hmset 'topic:' + topic_id, data, (err, reply) ->
+            console.log 'err is', err
+            console.log 'reply is', err
             redis.lpush 'user:topics:' + username, topic_id, (err, reply) ->
-              res.redirect '/moderate-topic/' + topic_id
+              res.redirect '/topic/moderate/' + topic_id
 
-app.get '/moderate-topic/:topic_id', (req, res, next) ->
-  username = req.cookie 'username'
+app.get '/topic/moderate/:topic_id', (req, res, next) ->
+  username = req.cookies.username
   topic_id = req.params.topic_id
-  if not username
+  if username == 'undefined'
     res.redirect '/login?error=requires_login'
   else
     redis.hget 'topic:' + topic_id, 'creator', (err, reply) ->
+      #console.log ("reply is", reply)
       if reply != username
         res.redirect '/login?error=user_not_moderator'
       else
         redis.hget 'topic:' + topic_id, 'name', (e, reply) ->
-          data = topic_name: reply
-          res.render 'moderate-topic', data
+          data = 
+            username: username
+            page: 'moderate'
+            topic: 
+              name: reply
+              id: topic_id
+          res.render 'index', data
 
-app.get '/join-topic/:topic_id', (req, res, next) ->
+app.get '/topic/join/:topic_id', (req, res, next) ->
   topic_id = req.params.topic_id
   redis.hmget 'topic:' + topid_id, ['name', 'creator'], (err, reply) ->
-    data = name: reply[0], creator: reply[1]
-    res.render 'join-topic', data
+    data = 
+      page: 'join'
+      topic: name: reply[0], creator: reply[1]
+    res.render 'index', data
 
 
 ## AJAX Handlers
-
 app.post '/submit-question', (req, res, next) ->
-  username = req.cookie 'username'
-  topic_id = req.body 'topic_id'
-  question = req.body 'question'
+  username = req.cookies.username
+  topic_id = req.body.topic_id
+  question = req.body.question
 
   if not username
     res.send error('username not set')
@@ -147,25 +188,39 @@ app.post '/submit-question', (req, res, next) ->
         redis.lpush 'topic:questions:' + topic_id, question_id, (err, reply) ->
             redis.lpush 'user:questions:' + topic_id, question_id, (err, reply) ->
               # Publish
-              io.sockets.in('follow-' + topic_id).emit('question_by_user', username)
-              io.sockets.in('moderate-' + topic_id).emit('question', data)
+              io.sockets.in('follow_' + topic_id).emit('question_by_user', username: username)
+              io.sockets.in('moderate_' + topic_id).emit('new_question', data)
               # Send Response
               res.send ok("Question submitted successfully.")
 
 
 ## Websockets
-
 io.sockets.on 'connection', (socket) ->
   log 'new connection'
 
-  socket.on 'join-topic', (data) ->
-    socket.join 'follow-' + data.topic_id
+  socket.on 'join_topic', (data) ->
+    socket.join 'follow_' + data.topic_id
 
-  socket.on 'moderate-topic', (data) ->
-    socket.join 'moderate-' + data.topic_id
+  socket.on 'moderate_topic', (data) ->
+    socket.join 'moderate_' + data.topic_id
 
-  socket.on 'event-user-typing', (data) ->
-    io.sockets.in('moderate-' + data.topic_id).emit('event-user-typing', {username: data.username})
+  socket.on 'event_start_user_typing', (data) ->
+    io.sockets.in('moderate_' + data.topic_id).emit('event_start_user_typing', {username: data.username})
 
+  socket.on 'event_end_user_typing', (data) ->
+    io.sockets.in('moderate_' + data.topic_id).emit('event_end_user_typing', {username: data.username})
+
+  socket.on 'get_questions', (data) ->
+    topic_id = data.topic_id
+    questions = []
+    redis.lrange 'topic:questions:' + topic_id, (err, reply) ->
+      remaining = reply.length
+      redis.hgetall 'topic:' + topic, (err, reply) ->
+        questions.push reply
+        if remaining == 0
+          socket.emit 'questions', questions
+
+
+## Start the app
 app.listen port
-console.log ('Chatter server listening on port %d', port)
+console.log 'Chatter server listening on port %d', port

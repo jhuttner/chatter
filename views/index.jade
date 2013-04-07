@@ -1,0 +1,42 @@
+extends layout
+
+block content
+  h1 Welcome to Chatter
+
+  - if (page == 'login')
+    h2 Login 
+      span.gray with your ldap username
+    div
+      form(action="/login", method="POST")
+        input(name="username", type="text")
+        input(type="submit", value="Login!")
+
+  - else
+    p
+      a(href="/home") Home
+      br
+      a(href="/logout") Logout
+      br
+      span Error:
+      span(id="error")
+
+    - if (page == 'home')
+      p Hello, #{username}.
+      h3 Chatter started by me:
+      each topic in user_topics
+        p(style="margin:0; padding:0") Topic: 
+          a(href="/topic/moderate/#{topic.id}") #{topic.name}
+
+      br
+      div
+        form(action="/topic/create", method="POST")
+          input(name="name", type="text")
+          input(type="submit", value="New chatter!")
+
+    - else if (page == 'join')
+      p This is the join page
+
+    - else if (page == 'moderate')
+      p This is the moderate page
+      p Topic name is #{topic.name}
+      p Topic ID is #{topic.id}
