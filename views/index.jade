@@ -18,25 +18,50 @@ block content
       a(href="/logout") Logout
       br
       span Error:
-      span(id="error")
+      span(id="error", style="color: red; font-weight: bold")
+      br
+      span Notice:
+      span(id="notice", style="color: green; font-weight: bold")
 
     - if (page == 'home')
       p Hello, #{username}.
-      h3 Chatter started by me:
+      h3 Topics started by you:
       each topic in user_topics
         p(style="margin:0; padding:0") Topic: 
           a(href="/topic/moderate/#{topic.id}") #{topic.name}
 
+      h3 Questions by you:
+      each question in user_questions
+        p(style="margin:0; padding:0") Question: #{question.text}
+
       br
+      div
+        form(action="/topic/watch", method="POST")
+          input(name="name", type="text")
+          input(type="submit", value="Watch this topic!")
       div
         form(action="/topic/create", method="POST")
           input(name="name", type="text")
-          input(type="submit", value="New chatter!")
+          input(type="submit", value="Create topic!")
 
-    - else if (page == 'join')
-      p This is the join page
+    - else if (page == 'watch')
+      p This is the watch page
+      p Topic name is #{topic.name}
+      p Topic ID is #{topic.id}
+
+      div
+        form(action="/submit-question", method="POST")
+          input(name="topic_id", type="hidden", value="#{topic.id}")
+          input(name="question", type="text", id="new-question")
+          input(type="submit", value="Submit question")
 
     - else if (page == 'moderate')
       p This is the moderate page
       p Topic name is #{topic.name}
       p Topic ID is #{topic.id}
+      h2 Users Typing
+      div(id="users-typing")
+      br
+
+      h2 Questions
+      div(id="questions")

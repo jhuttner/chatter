@@ -8,10 +8,15 @@ html
   body
     #content
       block content
+    script(type="text/javascript", src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js")
+    - if (page == 'watch' || page == 'moderate')
+      script(type="text/javascript", src="/socket.io/socket.io.js")
+    script(type="text/javascript", src="/javascripts/client.js")
     script(type="text/javascript")
       var chatter = window.chatter || {};
       chatter.page = {};
       chatter.page.type = '#{page}';
       chatter.page.username = '#{username}';
-    script(type="text/javascript", src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js")
-    script(type="text/javascript", src="/javascripts/client.js")
+    - if (locals.topic && locals.topic.id)
+      script(type="text/javascript")
+        chatter.page.topic_id = '#{topic.id}';
