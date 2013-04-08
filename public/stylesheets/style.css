@@ -7,6 +7,14 @@ a {
   color: #00B7FF;
 }
 
-.gray {
-  color: #aaa;
+.gray { color: #aaa; }
+
+#users-typing p {
+  font-size: 300%;
+}
+
+#questions p {
+  font-size: 300%;
+  margin: 0;
+  padding: 0;
 }

@@ -1,7 +1,9 @@
 extends layout
 
 block content
-  h1 Welcome to Chatter
+  h1 Chatter
+  //h1 #{locals.page}
+  //h1 #{locals.title}
 
   - if (page == 'login')
     h2 Login 
@@ -12,16 +14,14 @@ block content
         input(type="submit", value="Login!")
 
   - else
+    - if (locals.error)
+      p(style="color: red; font-weight: bold") ERROR: #{error}
+      
     p
-      a(href="/home") Home
-      br
-      a(href="/logout") Logout
-      br
-      span Error:
-      span(id="error", style="color: red; font-weight: bold")
-      br
-      span Notice:
-      span(id="notice", style="color: green; font-weight: bold")
+      span
+        a(href="/home") Home
+        &nbsp;&nbsp;/&nbsp;&nbsp;
+        a(href="/logout") Logout
 
     - if (page == 'home')
       p Hello, #{username}.
@@ -32,22 +32,29 @@ block content
 
       h3 Questions by you:
       each question in user_questions
-        p(style="margin:0; padding:0") Question: #{question.text}
+        p(style="margin:0; padding:0") #{question.topic_name} / #{question.topic_creator} / #{question.text}
 
       br
       div
         form(action="/topic/watch", method="POST")
           input(name="name", type="text")
-          input(type="submit", value="Watch this topic!")
+          input(type="submit", value="Watch topic!")
       div
         form(action="/topic/create", method="POST")
           input(name="name", type="text")
           input(type="submit", value="Create topic!")
 
     - else if (page == 'watch')
-      p This is the watch page
-      p Topic name is #{topic.name}
-      p Topic ID is #{topic.id}
+      h1 Topic: #{topic.name}
+      h1 Creator: is #{topic.creator}
+      br
+      span Error: 
+      span(id="error", style="color: red; font-weight: bold") none
+      br
+      span Notice: 
+      span(id="notice", style="color: green; font-weight: bold") none
+      br
+      br
 
       div
         form(action="/submit-question", method="POST")
@@ -56,12 +63,12 @@ block content
           input(type="submit", value="Submit question")
 
     - else if (page == 'moderate')
-      p This is the moderate page
-      p Topic name is #{topic.name}
-      p Topic ID is #{topic.id}
-      h2 Users Typing
+      //p This is the moderate page
+      h1 Topic: #{topic.name}
+      h1 Creator: you!
+      //p Topic ID is #{topic.id}
+      h1(class="gray") USERS TYPING
       div(id="users-typing")
       br
-
-      h2 Questions
+      h1(class="gray") QUESTIONS
       div(id="questions")

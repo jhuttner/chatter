@@ -9,9 +9,6 @@ remove_typing_user = (username) ->
 add_question = (question) ->
   $("#questions").prepend("<p>" + question.creator + ": " + question.text + "</p>")
 
-flash_username = (username) ->
-  $("#questions").append("<p>" + username + " asked a question</p>")
-
 $(document).ready () ->
   $("form input:text").eq(0).focus()
 
@@ -37,9 +34,6 @@ $(document).ready () ->
 
   else if chatter.page.type == 'watch'
     socket = io.connect()
-
-    socket.on 'question_by_user', (data) ->
-      flash_username username, "submitted a question."
 
     # Tell server when user is typing.
     user_typing = false
@@ -68,3 +62,7 @@ $(document).ready () ->
         $("#notice").text("Question submitted successfully")
         $form.find("input[type=text], textarea").val("")
         socket.emit "event_end_user_typing", username: chatter.page.username, topic_id: chatter.page.topic_id
+
+        cb = () ->
+          $("#notice").text("")
+        setTimeout cb, 2000

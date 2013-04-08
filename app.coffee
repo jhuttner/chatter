@@ -68,7 +68,7 @@ app.post '/login', (req, res, next) ->
 
 app.get /^\/login(.*)/, (req, res, next) ->
   res.clearCookie 'username'
-  data = page: 'login', username: ''
+  data = page: 'login', username: '', title: '-'
   res.render 'index', data
 
 app.get '/logout', (req, res, next) ->
@@ -104,13 +104,18 @@ get_questions_by_user = (username, cb) ->
             cb result
 
 app.get '/home', (req, res, next) ->
+  error = req.param 'error'
+  console.log 'error is', error
   username = req.cookies.username
   if typeof(username) == 'undefined'
     res.redirect '/login?error=login_required'
   else
     get_topics_by_user username, (topics) ->
       get_questions_by_user username, (questions) ->
+          console.log 'questions is', questions
           data =
+            error: error
+            title: '-'
             page: 'home'
             user_topics: topics
             user_questions: questions
@@ -125,8 +130,7 @@ app.post '/topic/create', (req, res, next) ->
   else
     redis.sadd 'global:topicNames', name, (err, reply) ->
       if reply == 0
-        # TODO - handle this better.  This error handler is not the one to use.
-        res.send error('topic name already in use.  try again')
+        res.redirect '/home?error=topic_name_already_in_user'
       else
         redis.incr 'global:nextTopicId', (err, reply) ->
           topic_id = reply
@@ -152,6 +156,7 @@ app.get '/topic/moderate/:topic_id', (req, res, next) ->
       else
         redis.hget 'topic:' + topic_id, 'name', (e, reply) ->
           data =
+            title: reply
             username: username
             page: 'moderate'
             topic:
@@ -167,6 +172,7 @@ app.get '/topic/watch/:topic_id', (req, res, next) ->
     topic_id = req.params.topic_id
     redis.hgetall 'topic:' + topic_id, (err, reply) ->
       data =
+        title: reply
         username: username
         page: 'watch'
         topic: reply
@@ -189,21 +195,26 @@ app.post '/submit-question', (req, res, next) ->
   if typeof(username) == 'undefined'
     res.send error('username not set')
   else
-    redis.incr 'global:nextQuestionId', (err, reply) ->
-      question_id = reply.toString()
-      data =
-        id: question_id,
-        text: question,
-        topic_id: topic_id,
-        creator: username,
-        created: (new Date()).getTime().toString()
-      redis.hmset 'question:' + reply, data, (err, reply) ->
-        redis.lpush 'topic:questions:' + topic_id, question_id, (err, reply) ->
-            redis.lpush 'user:questions:' + topic_id, question_id, (err, reply) ->
-              # Publish
-              io.sockets.in('moderate_' + topic_id).emit('questions', questions: [data])
-              # Send Response
-              res.send ok("Question submitted successfully.")
+    redis.hgetall 'topic:'+topic_id, (err, reply) ->
+      topic_creator = reply.creator
+      topic_name = reply.name
+      redis.incr 'global:nextQuestionId', (err, reply) ->
+        question_id = reply.toString()
+        data =
+          id: question_id,
+          text: question,
+          topic_id: topic_id,
+          topic_creator: topic_creator,
+          topic_name: topic_name,
+          creator: username,
+          created: (new Date()).getTime().toString()
+        redis.hmset 'question:' + reply, data, (err, reply) ->
+          redis.lpush 'topic:questions:' + topic_id, question_id, (err, reply) ->
+              redis.lpush 'user:questions:' + username, question_id, (err, reply) ->
+                # Publish
+                io.sockets.in('moderate_' + topic_id).emit('questions', questions: [data])
+                # Send Response
+                res.send ok("Question submitted successfully.")
 
 ## Websockets
 io.sockets.on 'connection', (socket) ->
