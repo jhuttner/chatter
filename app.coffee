@@ -223,9 +223,11 @@ io.sockets.on 'connection', (socket) ->
     socket.join 'moderate_' + data.topic_id
 
   socket.on 'event_start_user_typing', (data) ->
+    console.log 'user start typing', data
     io.sockets.in('moderate_' + data.topic_id).emit('event_start_user_typing', {username: data.username})
 
   socket.on 'event_end_user_typing', (data) ->
+    console.log 'user end typing', data
     io.sockets.in('moderate_' + data.topic_id).emit('event_end_user_typing', {username: data.username})
 
   socket.on 'get_questions', (data) ->

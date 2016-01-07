@@ -1,5 +1,5 @@
 // layout.jade
-doctype 5
+doctype html
 html
   head
     title=page
@@ -13,10 +13,10 @@ html
       script(type="text/javascript", src="/socket.io/socket.io.js")
     script(type="text/javascript", src="/javascripts/client.js")
     script(type="text/javascript")
-      var chatter = window.chatter || {};
-      chatter.page = {};
-      chatter.page.type = '#{page}';
-      chatter.page.username = '#{username}';
+      | var chatter = window.chatter || {};
+      | chatter.page = {};
+      | chatter.page.type = '#{page}';
+      | chatter.page.username = '#{username}';
     - if (locals.topic && locals.topic.id)
       script(type="text/javascript")
-        chatter.page.topic_id = '#{topic.id}';
+        | chatter.page.topic_id = '#{topic.id}';
